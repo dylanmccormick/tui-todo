@@ -7,7 +7,20 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const url = "https://charm.sh"
+type AppState int
+
+const (
+	TasksView AppState = iota
+	AddTaskView
+)
+
+type model struct {
+	currentView AppState
+	taskList    taskList
+	taskMenu    taskMenu
+}
+
+type taskMenu struct{}
 
 type task struct {
 	name        string
@@ -32,11 +45,27 @@ const (
 )
 
 func main() {
-	p := tea.NewProgram(baseList())
+	p := tea.NewProgram(baseModel())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there has been an error: %v", err)
 		os.Exit(1)
 	}
+}
+
+func (m model) View() string {
+	switch m.currentView {
+	case TasksView:
+		return m.taskList.View()
+	case AddTaskView:
+		return m.taskMenu.View()
+	}
+
+	return ""
+}
+
+func baseModel() model {
+	baseList := baseList()
+	return model{taskList: baseList}
 }
 
 func baseList() taskList {
@@ -57,6 +86,46 @@ func baseList() taskList {
 		},
 	}
 	return taskList{tasks: tasks, selected: make(map[int]struct{})}
+}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q": // WHO KNEW YOU COULD PUT MULTIPLE CHOICES IN A CASE STATEMENT
+			return m, tea.Quit
+		case "t":
+			m.currentView = TasksView
+			return m, nil
+		case "n":
+			m.currentView = AddTaskView
+			return m, nil
+		}
+	}
+
+	var cmd tea.Cmd
+	var ok bool
+	switch m.currentView {
+	case TasksView:
+		var tl any
+		tl, cmd = m.taskList.Update(msg)
+		m.taskList, ok = tl.(taskList)
+		if !ok {
+			panic("unexpected type")
+		}
+	case AddTaskView:
+		var tv any
+		tv, cmd = m.taskMenu.Update(msg)
+		m.taskMenu, ok = tv.(taskMenu)
+		if !ok {
+			panic("unexpected type")
+		}
+	}
+	return m, cmd
 }
 
 func (tl taskList) Init() tea.Cmd {
@@ -84,10 +153,15 @@ func (tl taskList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				tl.selected[tl.cursor] = struct{}{}
 			}
+		case "n":
+			tl.createNewTask()
 
 		}
 	}
 	return tl, nil
+}
+
+func (tl taskList) createNewTask() {
 }
 
 func (tl taskList) View() string {
@@ -107,7 +181,20 @@ func (tl taskList) View() string {
 		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, task.name)
 	}
 
+	s += "\nPress n to add a new task."
 	s += "\nPress q to quit.\n"
 
 	return s
+}
+
+func (tm taskMenu) Init() tea.Cmd {
+	return nil
+}
+
+func (tm taskMenu) View() string {
+	return "This is the task menu"
+}
+
+func (tm taskMenu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return tm, nil
 }
