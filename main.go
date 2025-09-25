@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -20,7 +21,10 @@ type model struct {
 	taskMenu    taskMenu
 }
 
-type taskMenu struct{}
+type taskMenu struct {
+	focusIndex int
+	inputs     []textinput.Model
+}
 
 type task struct {
 	name        string
@@ -63,9 +67,27 @@ func (m model) View() string {
 	return ""
 }
 
+func baseMenu() taskMenu {
+	tm := taskMenu{
+		inputs: make([]textinput.Model, 1),
+	}
+	var t textinput.Model
+	for i := range tm.inputs {
+		t = textinput.New()
+		switch i {
+		case 0:
+			t.Placeholder = "Name"
+			t.Focus()
+		}
+		tm.inputs[i] = t
+	}
+	return tm
+}
+
 func baseModel() model {
 	baseList := baseList()
-	return model{taskList: baseList}
+	taskMenu := baseMenu()
+	return model{taskList: baseList, taskMenu: taskMenu}
 }
 
 func baseList() taskList {
@@ -96,6 +118,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
+			// TODO: We can't enter in the form when we're always scanning for "t" and "n". I can't type any word with those letters while using the form
+			// maybe we should just use ctrl+n, ctrl+t??
+			// or we have a state that is something like "inputting text" and the only command is esc/ tab (esc to go back, tab/shift+tab to navigate
 		case "ctrl+c", "q": // WHO KNEW YOU COULD PUT MULTIPLE CHOICES IN A CASE STATEMENT
 			return m, tea.Quit
 		case "t":
@@ -188,13 +213,42 @@ func (tl taskList) View() string {
 }
 
 func (tm taskMenu) Init() tea.Cmd {
-	return nil
+	return textinput.Blink
 }
 
 func (tm taskMenu) View() string {
-	return "This is the task menu"
+	s := "Edit task here:\n"
+	for i := range tm.inputs {
+		s += tm.inputs[i].View()
+		if i < len(tm.inputs)-1 {
+			s += "\n"
+		}
+	}
+	s += "\nPress q to quit.\n"
+	return s
 }
 
 func (tm taskMenu) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	return tm, nil
+	switch msg := msg.(type){
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "tab":
+			cmds := make([]tea.Cmd, len(tm.inputs))
+			for i:=0; i<=len(tm.inputs)-1; i++{
+
+			}
+			return tm, tea.Batch(cmds...)
+		}
+	}
+	cmd := tm.updateInputs(msg)
+	return tm, cmd
+}
+
+func (tm *taskMenu) updateInputs(msg tea.Msg) (tea.Cmd){
+	cmds := make([]tea.Cmd, len(tm.inputs))
+
+	for i := range tm.inputs {
+		tm.inputs[i], cmds[i] = tm.inputs[i].Update(msg)
+	}
+	return tea.Batch(cmds...)
 }
