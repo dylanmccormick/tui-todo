@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type page int
@@ -15,11 +16,15 @@ const (
 	editTaskPage
 )
 
+var style = lipgloss.NewStyle().
+	Width(100)
+
 type model struct {
-	page     page
-	taskList taskList
-	taskMenu taskMenu
-	state    state
+	page        page
+	taskList    taskList
+	taskMenu    taskMenu
+	state       state
+	pageChanged bool
 }
 
 type state struct {
@@ -55,6 +60,7 @@ func main() {
 }
 
 func (m model) SwitchPage(page page) model {
+	m.pageChanged = true
 	m.page = page
 	return m
 }
@@ -62,9 +68,9 @@ func (m model) SwitchPage(page page) model {
 func (m model) View() string {
 	switch m.page {
 	case tasksPage:
-		return m.TasksView()
+		return style.Render(m.TasksView())
 	case editTaskPage:
-		return m.EditTasksView()
+		return style.Render(m.EditTasksView())
 	}
 
 	return ""
@@ -72,28 +78,34 @@ func (m model) View() string {
 
 func baseModel() model {
 	taskState := initTaskState()
+	editTaskState := initEditTaskState()
 	return model{state: state{
-		tasks: taskState,
-	},}
+		tasks:    taskState,
+		editTask: editTaskState,
+	}}
 }
 
 func initTaskState() tasksState {
-	tasks := []task{
-		{
-			name:        "take out garbage",
-			description: "put the garbage in the government garbage can",
-			assignee:    "Dylan",
-			status:      NOT_STARTED,
-			tags:        []string{"chores"},
-		},
-		{
-			name:        "do the dishes",
-			description: "clean all of the dishes in the sink",
-			assignee:    "Dylan",
-			status:      DONE,
-			tags:        []string{"chores"},
-		},
+	tasks, err := ReadFromFile()
+	if err != nil {
+		tasks = []task{
+			{
+				Name:        "take out garbage",
+				Description: "put the garbage in the government garbage can",
+				Assignee:    "Dylan",
+				Status:      NOT_STARTED,
+				Tags:        []string{"chores"},
+			},
+			{
+				Name:        "do the dishes",
+				Description: "clean all of the dishes in the sink",
+				Assignee:    "Dylan",
+				Status:      DONE,
+				Tags:        []string{"chores"},
+			},
+		}
 	}
+
 	return tasksState{tasks: tasks, selected: make(map[int]struct{})}
 }
 
@@ -105,14 +117,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		// TODO: We can't enter in the form when we're always scanning for "t" and "n". I can't type any word with those letters while using the form
-		// maybe we should just use ctrl+n, ctrl+t??
-		// or we have a state that is something like "inputting text" and the only command is esc/ tab (esc to go back, tab/shift+tab to navigate
-		case "ctrl+c": // WHO KNEW YOU COULD PUT MULTIPLE CHOICES IN A CASE STATEMENT
+		case "ctrl+c":
+			m.SaveToFile()
 			return m, tea.Quit
-		case "esc":
-			// TODO: This will need to go back on other pages. But for now do nothing
-			return m, nil
 		}
 	}
 
@@ -125,4 +132,3 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	return m, cmd
 }
-
